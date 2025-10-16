@@ -2,12 +2,19 @@
 
 block_cipher = None
 
+from PyInstaller.utils.hooks import collect_all
+
+# Collect all numpy, pandas, and PIL modules
+numpy_datas, numpy_binaries, numpy_hiddenimports = collect_all('numpy')
+pandas_datas, pandas_binaries, pandas_hiddenimports = collect_all('pandas')
+pillow_datas, pillow_binaries, pillow_hiddenimports = collect_all('PIL')
+
 a = Analysis(
     ['salary_calculator_gui.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
-    hiddenimports=[
+    binaries=numpy_binaries + pandas_binaries + pillow_binaries,
+    datas=numpy_datas + pandas_datas + pillow_datas,
+    hiddenimports=numpy_hiddenimports + pandas_hiddenimports + pillow_hiddenimports + [
         'tkinter',
         'tkinter.ttk',
         'tkinter.filedialog',
