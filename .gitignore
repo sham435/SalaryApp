@@ -86,4 +86,32 @@ certificates/
 logs/
 *.log
 
+# Build outputs and packages
+JatanSalaryApp-Windows/
+*.exe
+*.app
+*.apk
+*.aab
+*.zip
+*.dmg
+*.pkg
+*.deb
+*.rpm
+
+# Flutter/Mobile
+jatan_salary_mobile/build/
+jatan_salary_mobile/.dart_tool/
+jatan_salary_mobile/.flutter-plugins
+jatan_salary_mobile/.flutter-plugins-dependencies
+jatan_salary_mobile/.packages
+jatan_salary_mobile/android/.gradle/
+jatan_salary_mobile/android/app/build/
+jatan_salary_mobile/ios/Pods/
+jatan_salary_mobile/ios/.symlinks/
+jatan_salary_mobile/ios/Flutter/Flutter.framework
+jatan_salary_mobile/ios/Flutter/Flutter.podspec
+jatan_salary_mobile/pubspec.lock
+
+# Test files
+test_gui.py
 

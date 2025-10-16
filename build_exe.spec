@@ -9,11 +9,20 @@ numpy_datas, numpy_binaries, numpy_hiddenimports = collect_all('numpy')
 pandas_datas, pandas_binaries, pandas_hiddenimports = collect_all('pandas')
 pillow_datas, pillow_binaries, pillow_hiddenimports = collect_all('PIL')
 
+# Filter out .md files from collected datas
+def filter_md_files(datas):
+    """Remove any .md files from the datas list"""
+    return [(src, dst) for src, dst in datas if not src.lower().endswith('.md')]
+
+filtered_numpy_datas = filter_md_files(numpy_datas)
+filtered_pandas_datas = filter_md_files(pandas_datas)
+filtered_pillow_datas = filter_md_files(pillow_datas)
+
 a = Analysis(
     ['salary_calculator_gui.py'],
     pathex=[],
     binaries=numpy_binaries + pandas_binaries + pillow_binaries,
-    datas=numpy_datas + pandas_datas + pillow_datas,
+    datas=filtered_numpy_datas + filtered_pandas_datas + filtered_pillow_datas,
     hiddenimports=numpy_hiddenimports + pandas_hiddenimports + pillow_hiddenimports + [
         'tkinter',
         'tkinter.ttk',
@@ -48,6 +57,8 @@ a = Analysis(
         'matplotlib',
         'pytest',
         'IPython',
+        '*.md',
+        '*.MD',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

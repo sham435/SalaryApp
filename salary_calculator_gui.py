@@ -5,6 +5,7 @@ import datetime
 from datetime import timedelta
 import calendar
 import sqlite3
+import sys
 import os
 from typing import List, Dict, Optional
 from reportlab.lib.pagesizes import A4
@@ -858,12 +859,37 @@ DAY TYPE SUMMARY:
 # Enhanced Labor Salary Calculator Class
 class EnhancedLaborSalaryCalculator:
     def __init__(self, db_name='labor_salary.db'):
-        self.db_name = db_name
+        # Get the directory where the script is located
+        if getattr(sys, 'frozen', False):
+            # Running as compiled executable
+            application_path = os.path.dirname(sys.executable)
+        else:
+            # Running as script
+            application_path = os.path.dirname(os.path.abspath(__file__))
+
+        # Create full database path
+        if not os.path.isabs(db_name):
+            self.db_name = os.path.join(application_path, db_name)
+        else:
+            self.db_name = db_name
+
+        # Ensure the directory exists
+        db_dir = os.path.dirname(self.db_name)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+
         self.init_database()
 
     def init_database(self):
         """Initialize SQLite database"""
-        conn = sqlite3.connect(self.db_name)
+        try:
+            conn = sqlite3.connect(self.db_name)
+        except sqlite3.OperationalError as e:
+            raise sqlite3.OperationalError(
+                f"Unable to open database file at: {self.db_name}\n"
+                f"Error: {str(e)}\n"
+                f"Please ensure the directory exists and is writable."
+            )
         cursor = conn.cursor()
 
         # Labor profiles table
