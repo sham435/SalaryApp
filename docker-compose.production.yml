@@ -1,0 +1,458 @@
+version: '3.9'
+
+services:
+  # ============================================
+  # PostgreSQL Database Service
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: jatan_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-salary_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ChangeMeInProduction}
+      POSTGRES_DB: ${DB_NAME:-labor_salary_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - jatan_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-salary_admin} -d ${DB_NAME:-labor_salary_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres -c shared_buffers=256MB -c max_connections=200 -c work_mem=16MB
+
+  # ============================================
+  # Redis - Cache and Celery Backend
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: jatan_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - jatan_network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # ============================================
+  # RabbitMQ - Message Broker
+  # ============================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: jatan_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-admin123}
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672" # AMQP port
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - jatan_network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ============================================
+  # Salary Management Application
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jatan_salary_app
+    restart: unless-stopped
+    environment:
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-labor_salary_db}
+      DB_USER: ${DB_USER:-salary_admin}
+      DB_PASSWORD: ${DB_PASSWORD:-ChangeMeInProduction}
+
+      # Application Configuration
+      APP_ENV: ${APP_ENV:-production}
+      APP_PORT: ${APP_PORT:-8000}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      TZ: ${TZ:-Asia/Dubai}
+
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # RabbitMQ Configuration
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-admin123}
+
+      # Celery Configuration
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-pyamqp://admin:admin123@rabbitmq:5672//}
+      CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/0}
+
+      # JatanCRM Integration
+      CRM_API_BASE: ${CRM_API_BASE:-https://crm.jatan.com/api/v1}
+      CRM_API_KEY: ${CRM_API_KEY:-}
+      CRM_SYNC_INTERVAL: ${CRM_SYNC_INTERVAL:-10}
+      CRM_ENABLED: ${CRM_ENABLED:-false}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ./exports:/app/exports
+      - ./certificates:/app/certificates
+      - ./.env:/app/.env:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - jatan_network
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import psycopg2; print('OK')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # Celery Worker - Asynchronous Tasks
+  # ============================================
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jatan_celery_worker
+    restart: unless-stopped
+    command: celery -A celery_app.celery worker -l info -Q crm_sync,default
+    environment:
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-labor_salary_db}
+      DB_USER: ${DB_USER:-salary_admin}
+      DB_PASSWORD: ${DB_PASSWORD:-ChangeMeInProduction}
+
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # RabbitMQ Configuration
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+
+      # Celery Configuration
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-pyamqp://admin:admin123@rabbitmq:5672//}
+      CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/0}
+
+      # JatanCRM Integration
+      CRM_API_BASE: ${CRM_API_BASE:-https://crm.jatan.com/api/v1}
+      CRM_API_KEY: ${CRM_API_KEY:-}
+      CRM_ENABLED: ${CRM_ENABLED:-false}
+
+      TZ: ${TZ:-Asia/Dubai}
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - jatan_network
+
+  # ============================================
+  # Celery Beat - Scheduled Tasks
+  # ============================================
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jatan_celery_beat
+    restart: unless-stopped
+    command: celery -A celery_app.celery beat -l info
+    environment:
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # Celery Configuration
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-pyamqp://admin:admin123@rabbitmq:5672//}
+      CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/0}
+
+      # CRM Sync Configuration
+      CRM_SYNC_INTERVAL: ${CRM_SYNC_INTERVAL:-10}
+      CRM_ENABLED: ${CRM_ENABLED:-false}
+
+      TZ: ${TZ:-Asia/Dubai}
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - jatan_network
+
+  # ============================================
+  # Flower - Celery Monitoring (Optional)
+  # ============================================
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jatan_flower
+    restart: unless-stopped
+    command: celery -A celery_app.celery flower --port=5555
+    environment:
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-pyamqp://admin:admin123@rabbitmq:5672//}
+      CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/0}
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - jatan_network
+    profiles:
+      - monitoring
+
+  # ============================================
+  # PgAdmin - Database Management (Optional)
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: jatan_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@jatan.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_LISTEN_PORT: 80
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - jatan_network
+    depends_on:
+      - postgres
+    profiles:
+      - admin
+
+  # ============================================
+  # MONITORING STACK
+  # ============================================
+
+  # PostgreSQL Exporter
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: jatan_postgres_exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${DB_USER:-salary_admin}:${DB_PASSWORD:-ChangeMeInProduction}@postgres:5432/${DB_NAME:-labor_salary_db}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    networks:
+      - jatan_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - monitoring
+
+  # Redis Exporter
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: jatan_redis_exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "9121:9121"
+    networks:
+      - jatan_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - monitoring
+
+  # RabbitMQ Exporter
+  rabbitmq_exporter:
+    image: kbudde/rabbitmq-exporter:latest
+    container_name: jatan_rabbitmq_exporter
+    restart: unless-stopped
+    environment:
+      RABBIT_URL: http://rabbitmq:15672
+      RABBIT_USER: ${RABBITMQ_USER:-admin}
+      RABBIT_PASSWORD: ${RABBITMQ_PASS:-admin123}
+      RABBIT_CAPABILITIES: bert,no_sort
+    ports:
+      - "9419:9419"
+    networks:
+      - jatan_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    profiles:
+      - monitoring
+
+  # Celery Exporter
+  celery_exporter:
+    image: danihodovic/celery-exporter:latest
+    container_name: jatan_celery_exporter
+    restart: unless-stopped
+    environment:
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-pyamqp://admin:admin123@rabbitmq:5672//}
+      CELERY_RESULT_BACKEND: ${CELERY_BACKEND_URL:-redis://redis:6379/0}
+    ports:
+      - "9808:9808"
+    networks:
+      - jatan_network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - monitoring
+
+  # Node Exporter (Host Metrics)
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: jatan_node_exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+    ports:
+      - "9100:9100"
+    volumes:
+      - '/:/host:ro,rslave'
+    networks:
+      - jatan_network
+    profiles:
+      - monitoring
+
+  # cAdvisor (Container Metrics)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: jatan_cadvisor
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - jatan_network
+    profiles:
+      - monitoring
+
+  # Prometheus (Metrics Collection)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: jatan_prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - jatan_network
+    depends_on:
+      - postgres_exporter
+      - redis_exporter
+      - rabbitmq_exporter
+      - celery_exporter
+    profiles:
+      - monitoring
+
+  # Grafana (Visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: jatan_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: http://localhost:3000
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - jatan_network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+networks:
+  jatan_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

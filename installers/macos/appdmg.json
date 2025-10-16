@@ -1,0 +1,38 @@
+{
+  "title": "Jatan Stack Installer",
+  "icon": "jatan_icon.icns",
+  "background": "background.png",
+  "format": "UDZO",
+  "window": {
+    "position": {
+      "x": 100,
+      "y": 100
+    },
+    "size": {
+      "width": 640,
+      "height": 480
+    }
+  },
+  "contents": [
+    {
+      "x": 448,
+      "y": 240,
+      "type": "link",
+      "path": "/Applications"
+    },
+    {
+      "x": 192,
+      "y": 240,
+      "type": "file",
+      "path": "Jatan Salary System.app"
+    },
+    {
+      "x": 320,
+      "y": 380,
+      "type": "file",
+      "path": "README.txt"
+    }
+  ]
+}
+
+

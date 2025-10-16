@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Database
+*.db
+*.db-journal
+*.sql
+backups/
+
+# Environment Variables & Configuration
+.env
+.env.local
+.env.*.local
+config.ini
+secrets.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+salary_app.log
+
+# Reports & Exports
+*.xlsx
+*.xls
+*.csv
+exports/
+
+# PDF Certificates
+*.pdf
+certificates/
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# OS
+Thumbs.db
+.DS_Store
+
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+*.log
+
+# Backups
+backups/
+exports/
+certificates/
+
+# Logs
+logs/
+*.log
+
+

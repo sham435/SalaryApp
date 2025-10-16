@@ -1,0 +1,64 @@
+═══════════════════════════════════════════════════════════
+  PLEASE HELP ME BUILD A WINDOWS .EXE FILE
+  (This will take 2-3 minutes of your time)
+═══════════════════════════════════════════════════════════
+
+Hi! Thanks for helping me! 
+
+I need to create a Windows .exe file from this folder.
+You don't need any special skills - just follow these steps:
+
+───────────────────────────────────────────────────────────
+STEP 1: Make sure Python is installed
+───────────────────────────────────────────────────────────
+
+Open Command Prompt and type:
+    python --version
+
+If it shows a version number, you're good! ✓
+If it says "not found", install from: https://python.org
+  (Make sure to check "Add Python to PATH" during install)
+
+───────────────────────────────────────────────────────────
+STEP 2: Run the build script
+───────────────────────────────────────────────────────────
+
+Just double-click this file:
+    build_windows_exe.bat
+
+Wait 2-3 minutes while it:
+  - Installs needed packages
+  - Builds the .exe file
+  - Shows "Build Complete!"
+
+───────────────────────────────────────────────────────────
+STEP 3: Give me back the .exe
+───────────────────────────────────────────────────────────
+
+The file will be at:
+    dist\JatanSalaryApp.exe
+
+Copy this .exe file to a USB drive or email it to me.
+
+That's it! You're done! ✓
+
+═══════════════════════════════════════════════════════════
+
+TROUBLESHOOTING (if the .bat file doesn't work):
+─────────────────────────────────────────────────
+
+Open Command Prompt in this folder and type these commands:
+
+    pip install pyinstaller
+    pip install -r requirements.txt
+    pyinstaller build_exe.spec --clean --noconfirm
+
+Then check the dist folder for JatanSalaryApp.exe
+
+═══════════════════════════════════════════════════════════
+
+THANK YOU SO MUCH FOR YOUR HELP! 🙏
+
+Questions? Contact me!
+═══════════════════════════════════════════════════════════
+

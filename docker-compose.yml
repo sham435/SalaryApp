@@ -1,0 +1,111 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: jatan_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-salary_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ChangeMeInProduction}
+      POSTGRES_DB: ${DB_NAME:-labor_salary_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - jatan_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-salary_admin} -d ${DB_NAME:-labor_salary_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres -c shared_buffers=256MB -c max_connections=200 -c work_mem=16MB
+
+  # Salary Management Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jatan_salary_app
+    restart: unless-stopped
+    environment:
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-labor_salary_db}
+      DB_USER: ${DB_USER:-salary_admin}
+      DB_PASSWORD: ${DB_PASSWORD:-ChangeMeInProduction}
+
+      # Application Configuration
+      APP_ENV: ${APP_ENV:-production}
+      APP_PORT: ${APP_PORT:-8000}
+      APP_DEBUG: ${APP_DEBUG:-false}
+
+      # JatanCRM Integration (Future)
+      CRM_API_BASE: ${CRM_API_BASE:-https://crm.jatan.com/api/v1}
+      CRM_API_KEY: ${CRM_API_KEY:-}
+      CRM_SYNC_INTERVAL: ${CRM_SYNC_INTERVAL:-10}
+      CRM_ENABLED: ${CRM_ENABLED:-false}
+
+      # Timezone
+      TZ: ${TZ:-Asia/Dubai}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ./exports:/app/exports
+      - ./certificates:/app/certificates
+      - ./.env:/app/.env:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - jatan_network
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import psycopg2; print('OK')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PgAdmin (Optional - for database management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: jatan_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@jatan.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_LISTEN_PORT: 80
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - jatan_network
+    depends_on:
+      - postgres
+    profiles:
+      - admin # Only starts if explicitly requested
+
+networks:
+  jatan_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
